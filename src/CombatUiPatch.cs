@@ -52,10 +52,14 @@ internal static class CombatUiInjector
         CombatHostedBattleButton button = CombatHostedBattleButton.Create(template);
         button.Name = ButtonName;
 
-        ui.AddChild(button);
         if (template != null)
         {
-            ui.MoveChild(button, template.GetIndex());
+            template.AddChild(button);
+            button.ZIndex = template.ZIndex + 1;
+        }
+        else
+        {
+            ui.AddChild(button);
         }
 
         button.InitializeButton();

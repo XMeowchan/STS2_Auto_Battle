@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using GFileAccess = Godot.FileAccess;
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes;
@@ -242,7 +243,7 @@ internal sealed class CombatHostedBattleButton : NButton
         BuildFromTemplate();
         ConnectSignals();
         _viewport = GetViewport();
-        TopLevel = true;
+        TopLevel = false;
         ConnectLayoutSignals();
         ConnectLifecycleSignals();
         SetProcess(true);
@@ -261,9 +262,9 @@ internal sealed class CombatHostedBattleButton : NButton
                 return Position;
             }
 
-            Vector2 templatePos = _templateButton.GlobalPosition;
-            float xOffset = (_templateButton.Size.X - GetScaledTemplateSize().X) * 0.5f;
-            return templatePos + new Vector2(xOffset, -GetVerticalSpacing());
+            Vector2 scaledSize = GetScaledTemplateSize();
+            float xOffset = (_templateButton.Size.X - scaledSize.X) * 0.5f;
+            return new Vector2(xOffset, -GetVerticalSpacing());
         }
     }
 
@@ -279,13 +280,14 @@ internal sealed class CombatHostedBattleButton : NButton
 
         FocusMode = _templateButton.FocusMode;
         MouseFilter = MouseFilterEnum.Stop;
-        Size = _templateButton.Size;
-        CustomMinimumSize = _templateButton.CustomMinimumSize;
-        PivotOffset = _templateButton.PivotOffset;
-        Scale = new Vector2(ButtonScale, ButtonScale);
+        Size = GetScaledTemplateSize();
+        CustomMinimumSize = GetScaledTemplateSize();
+        PivotOffset = Size * 0.5f;
 
         Control visuals = (Control)_templateButton.GetNode("Visuals").Duplicate();
         visuals.Name = "Visuals";
+        visuals.Scale = new Vector2(ButtonScale, ButtonScale);
+        visuals.PivotOffset = _templateButton.PivotOffset;
         AddChild(visuals);
         _visuals = visuals;
 
@@ -309,23 +311,13 @@ internal sealed class CombatHostedBattleButton : NButton
             return;
         }
 
-        Vector2 templatePosition = _templateButton.Position;
-        Vector2 templateGlobalPosition = _templateButton.GlobalPosition;
         Vector2 templateSize = _templateButton.Size;
-        Vector2 viewportSize = (_viewport ?? GetViewport()).GetVisibleRect().Size;
-        if (!force
-            && templatePosition == _lastTemplatePosition
-            && templateGlobalPosition == _lastTemplateGlobalPosition
-            && templateSize == _lastTemplateSize
-            && viewportSize == _lastViewportSize)
+        if (!force && templateSize == _lastTemplateSize)
         {
             return;
         }
 
-        _lastTemplatePosition = templatePosition;
-        _lastTemplateGlobalPosition = templateGlobalPosition;
         _lastTemplateSize = templateSize;
-        _lastViewportSize = viewportSize;
 
         _positionTween?.Kill();
         Position = _visibilityState == VisibilityState.Visible ? ShowPos : HidePos;
@@ -340,7 +332,6 @@ internal sealed class CombatHostedBattleButton : NButton
 
         Callable refreshCallable = Callable.From(OnLayoutChanged);
         _templateButton.Connect("item_rect_changed", refreshCallable);
-        _viewport?.Connect("size_changed", refreshCallable);
     }
 
     private void ConnectLifecycleSignals()
@@ -437,12 +428,12 @@ internal sealed class CombatHostedBattleButton : NButton
 
     private bool ShouldShowButton()
     {
-        if (NCombatRoom.Instance == null || NCombatRoom.Instance.Mode != CombatRoomMode.ActiveCombat)
+        if (_templateButton == null || CombatManager.Instance == null || !CombatManager.Instance.IsInProgress)
         {
             return false;
         }
 
-        if (ActiveScreenContext.Instance == null || !ActiveScreenContext.Instance.IsCurrent(NCombatRoom.Instance))
+        if (NCombatRoom.Instance == null || NCombatRoom.Instance.Mode != CombatRoomMode.ActiveCombat)
         {
             return false;
         }
