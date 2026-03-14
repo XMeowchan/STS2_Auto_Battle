@@ -1,0 +1,61 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on:
+      - self-hosted
+      - windows
+      - sts2
+    env:
+      STS2_GAME_DIR: ${{ vars.STS2_GAME_DIR }}
+      STS2_GODOT_EXE: ${{ vars.STS2_GODOT_EXE }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build release artifacts
+        run: ./scripts/build-mod-artifacts.ps1 -Configuration Release -SkipImport
+
+      - name: Package release zip
+        run: ./scripts/package-release.ps1 -Configuration Release -OutputDir dist -Version $env:RELEASE_TAG
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CombatAutoHost-${{ env.RELEASE_TAG }}
+          path: dist/*.zip
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: CombatAutoHost ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: dist/*.zip

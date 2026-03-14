@@ -77,3 +77,15 @@ Recommended runner setup:
   - `STS2_GODOT_EXE`
 
 If the variables are not set, the scripts still try to auto-detect both paths on the runner.
+
+## Release Flow
+
+- Push a tag like `v0.1.0` to trigger `Publish Release`
+- Or run the `Publish Release` workflow manually and provide a tag name
+- The workflow builds the mod, creates `dist/CombatAutoHost-<version>.zip`, and uploads it to the GitHub release
+
+You can also package locally after building:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1 -Configuration Release
+```
