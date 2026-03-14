@@ -3,5 +3,5 @@
   "name": "Multiplayer Combat Host",
   "author": "OpenAI Codex",
   "description": "Adds a combat auto-host button that reuses the in-game battle UI style and auto-plays the local player's turn in combat.",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

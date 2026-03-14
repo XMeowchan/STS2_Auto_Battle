@@ -80,7 +80,7 @@ If the variables are not set, the scripts still try to auto-detect both paths on
 
 ## Release Flow
 
-- Push a tag like `v0.1.0` to trigger `Publish Release`
+- Push a tag like `v0.2.0` to trigger `Publish Release`
 - Or run the `Publish Release` workflow manually and provide a tag name
 - The workflow builds the mod, creates `dist/CombatAutoHost-<version>.zip`, and uploads it to the GitHub release
 
