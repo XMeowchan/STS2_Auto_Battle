@@ -1,0 +1,43 @@
+name: Build Mod
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - windows
+      - sts2
+    env:
+      STS2_GAME_DIR: ${{ vars.STS2_GAME_DIR }}
+      STS2_GODOT_EXE: ${{ vars.STS2_GODOT_EXE }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build release artifacts
+        run: ./scripts/build-mod-artifacts.ps1 -Configuration Release -SkipImport
+
+      - name: Upload mod artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CombatAutoHost-Release
+          path: |
+            mod_manifest.json
+            src/bin/Release/CombatAutoHost.dll
+            src/bin/Release/CombatAutoHost.pck

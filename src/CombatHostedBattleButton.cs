@@ -55,6 +55,7 @@ internal sealed class CombatHostedBattleButton : NButton
     private Tween? _positionTween;
     private Tween? _hoverTween;
     private NPingButton? _templateButton;
+    private Viewport? _viewport;
     private VisibilityState _visibilityState = VisibilityState.Hidden;
     private Vector2 _lastTemplatePosition = new(float.NaN, float.NaN);
     private Vector2 _lastTemplateSize = new(float.NaN, float.NaN);
@@ -74,6 +75,8 @@ internal sealed class CombatHostedBattleButton : NButton
     {
         BuildFromTemplate();
         ConnectSignals();
+        _viewport = GetViewport();
+        ConnectLayoutSignals();
         SetProcess(true);
         Disable();
         RefreshLayout(force: true);
@@ -95,8 +98,6 @@ internal sealed class CombatHostedBattleButton : NButton
 
     public override void _Process(double delta)
     {
-        RefreshLayout();
-
         bool shouldShow = ShouldShowButton();
         if (!shouldShow)
         {
@@ -281,9 +282,31 @@ internal sealed class CombatHostedBattleButton : NButton
         Position = _visibilityState == VisibilityState.Visible ? ShowPos : HidePos;
     }
 
+    private void ConnectLayoutSignals()
+    {
+        if (_templateButton == null)
+        {
+            return;
+        }
+
+        Callable refreshCallable = Callable.From(OnLayoutChanged);
+        _templateButton.Connect("item_rect_changed", refreshCallable);
+        _viewport?.Connect("size_changed", refreshCallable);
+    }
+
     private Vector2 GetTemplatePosition()
     {
         return _templateButton?.Position ?? Position;
+    }
+
+    private void OnLayoutChanged()
+    {
+        CallDeferred(nameof(RefreshLayoutDeferred));
+    }
+
+    private void RefreshLayoutDeferred()
+    {
+        RefreshLayout(force: true);
     }
 
     private void SetVisibilityState(VisibilityState newState)
