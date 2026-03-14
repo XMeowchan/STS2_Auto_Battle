@@ -190,9 +190,9 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
 
     public decimal GetTurnEndThreshold(AutoPlayMode mode) => mode switch
     {
-        AutoPlayMode.Defensive => 12m,
-        AutoPlayMode.Aggressive => 6m,
-        _ => 10m
+        AutoPlayMode.Defensive => 2m,
+        AutoPlayMode.Aggressive => -4m,
+        _ => 0m
     };
 
     private static IEnumerable<CardCandidate> EnumerateCandidates(AutoPlayContext context, HashSet<CardModel> attemptedCards)

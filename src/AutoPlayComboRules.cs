@@ -42,11 +42,11 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (!context.HasRelic<IceCream>() || context.Mode == AutoPlayMode.Aggressive) return;
+            if (!context.HasRelic<IceCream>() || context.Mode != AutoPlayMode.Defensive) return;
             int remainingEnergy = context.Energy - metrics.EnergyCost;
-            if (remainingEnergy > 0 && metrics.Candidate.Card.EnergyCost.GetAmountToSpend() > 0 && state.ImmediateScore < 16m)
+            if (remainingEnergy > 1 && metrics.Candidate.Card.EnergyCost.GetAmountToSpend() > 0 && state.ImmediateScore < 8m)
             {
-                state.AddPenalty(6m + remainingEnergy);
+                state.AddPenalty(2m + remainingEnergy);
                 state.AddReason(CardReasonFlags.ResourceHold);
             }
         }
@@ -67,9 +67,9 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (context.HasRelic<ArtOfWar>() && metrics.IsAttack && context.AttacksPlayedThisTurn == 0 && !metrics.HasLethal && metrics.EffectiveDamageTotal < 10)
+            if (context.Mode == AutoPlayMode.Defensive && context.HasRelic<ArtOfWar>() && metrics.IsAttack && context.AttacksPlayedThisTurn == 0 && !metrics.HasLethal && metrics.EffectiveDamageTotal < 5)
             {
-                state.AddPenalty(10m);
+                state.AddPenalty(2m);
                 state.AddReason(CardReasonFlags.ResourceHold);
             }
         }
@@ -79,9 +79,9 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (context.HasRelic<Pocketwatch>() && context.CardsPlayedThisTurn >= 3 && state.ImmediateScore < 18m)
+            if (context.Mode == AutoPlayMode.Defensive && context.HasRelic<Pocketwatch>() && context.CardsPlayedThisTurn >= 3 && state.ImmediateScore < 6m)
             {
-                state.AddPenalty(8m);
+                state.AddPenalty(2m);
                 state.AddReason(CardReasonFlags.ResourceHold);
             }
         }
@@ -240,7 +240,7 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (context.HasRelic<RippleBasin>() && metrics.IsAttack && context.AttacksPlayedThisTurn == 0 && !metrics.HasLethal && metrics.EffectiveDamageTotal < 12) state.AddPenalty(7m);
+            if (context.Mode == AutoPlayMode.Defensive && context.HasRelic<RippleBasin>() && metrics.IsAttack && context.AttacksPlayedThisTurn == 0 && !metrics.HasLethal && metrics.EffectiveDamageTotal < 5) state.AddPenalty(2m);
         }
     }
 

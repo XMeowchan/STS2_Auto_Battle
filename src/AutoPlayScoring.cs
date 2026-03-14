@@ -74,6 +74,12 @@ internal static class AutoPlayScoring
             score += weights.PowerWeight * roundMultiplier;
         }
 
+        if (metrics.EnergyCost + metrics.StarCost > 0)
+        {
+            score += metrics.EnergyCost * 9m;
+            score += metrics.StarCost * 11m;
+        }
+
         score -= metrics.EnergyCost * weights.EnergyCostPenalty;
         score -= metrics.StarCost * weights.StarCostPenalty;
         if (metrics.ShouldRetain)
@@ -125,9 +131,9 @@ internal static class AutoPlayScoring
         decimal blockBias = context.CurrentBlock == 0 ? 0.6m : 0m;
         return context.Mode switch
         {
-            AutoPlayMode.Defensive => new ScoreWeights(7m, 3.8m + risk * 2.2m + blockBias, 4.5m, 4.8m, 4m, 4m, 10m, 1m, 1.35m, 4.5m, 2.5m),
-            AutoPlayMode.Aggressive => new ScoreWeights(9.5m, 1.6m + risk, 3.5m, 4m, 3.8m, 3.5m, 8m, 0.7m, 1.1m, 1.5m, 1m),
-            _ => new ScoreWeights(8m, 2.6m + risk * 1.7m + blockBias, 4m, 4.4m, 4.2m, 4m, 11m, 0.9m, 1.2m, 3m, 1.5m)
+            AutoPlayMode.Defensive => new ScoreWeights(7m, 3.8m + risk * 2.2m + blockBias, 4.5m, 4.8m, 4m, 4m, 10m, 0.15m, 0.2m, 3m, 1.25m),
+            AutoPlayMode.Aggressive => new ScoreWeights(9.5m, 1.6m + risk, 3.5m, 4m, 3.8m, 3.5m, 8m, 0.1m, 0.15m, 1.2m, 0.8m),
+            _ => new ScoreWeights(8m, 2.6m + risk * 1.7m + blockBias, 4m, 4.4m, 4.2m, 4m, 11m, 0.12m, 0.18m, 2m, 1m)
         };
     }
 

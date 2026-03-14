@@ -1,28 +1,19 @@
 using System;
 using Godot;
-using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
-using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Vfx;
-using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.addons.mega_text;
 
 namespace CombatAutoHost;
 
 internal sealed class CombatAutoModeButton : NButton
 {
-    private enum VisibilityState
-    {
-        Hidden,
-        Visible
-    }
-
-    private const float ButtonScale = 0.56f;
+    private const float ButtonScale = 0.62f;
+    private const float HorizontalGap = 12f;
     private static readonly StringName ShaderValueKey = new("v");
-    private static readonly Vector2 AnchorOffset = new(-18f, 10f);
 
     private CombatHostedBattleButton? _autoButton;
     private NEndTurnButton? _templateButton;
@@ -30,10 +21,8 @@ internal sealed class CombatAutoModeButton : NButton
     private TextureRect? _image;
     private MegaLabel? _label;
     private ShaderMaterial? _shader;
-    private Tween? _positionTween;
     private Tween? _hoverTween;
     private bool _initialized;
-    private VisibilityState _visibilityState = VisibilityState.Hidden;
 
     protected override string[] Hotkeys => Array.Empty<string>();
 
@@ -60,18 +49,21 @@ internal sealed class CombatAutoModeButton : NButton
     public override void _Process(double delta)
     {
         RefreshLayout();
-        if (ShouldShowButton())
+
+        bool shouldShow = _autoButton != null && _autoButton.IsInsideTree() && _autoButton.IsEnabled;
+        Visible = shouldShow;
+
+        if (shouldShow)
         {
-            SetVisibilityState(VisibilityState.Visible);
             if (!IsEnabled)
             {
                 Enable();
             }
-
-            return;
         }
-
-        SetVisibilityState(VisibilityState.Hidden);
+        else if (IsEnabled)
+        {
+            Disable();
+        }
     }
 
     internal void InitializeButton()
@@ -85,10 +77,11 @@ internal sealed class CombatAutoModeButton : NButton
         BuildFromTemplate();
         ConnectSignals();
         SetProcess(true);
-        AutoPlaySettingsStore.ModeChanged += OnModeChanged;
+        Visible = false;
         Disable();
+        AutoPlaySettingsStore.ModeChanged += OnModeChanged;
         RefreshLabel();
-        RefreshLayout(force: true);
+        RefreshLayout();
     }
 
     protected override void OnEnable()
@@ -124,7 +117,7 @@ internal sealed class CombatAutoModeButton : NButton
         }
 
         _hoverTween?.Kill();
-        _shader.SetShaderParameter(ShaderValueKey, 1.45f);
+        _shader.SetShaderParameter(ShaderValueKey, 1.4f);
         _visuals.Position = new Vector2(0f, -2f);
         _label.Modulate = StsColors.gold;
     }
@@ -158,9 +151,9 @@ internal sealed class CombatAutoModeButton : NButton
 
         _hoverTween?.Kill();
         _hoverTween = CreateTween().SetParallel();
-        _hoverTween.TweenMethod(Callable.From<float>(UpdateShaderValue), GetCurrentShaderValue(), 1f, 0.25);
-        _hoverTween.TweenProperty(_visuals, "position", new Vector2(0f, 4f), 0.25);
-        _hoverTween.TweenProperty(_label, "modulate", Colors.DarkGray, 0.25);
+        _hoverTween.TweenMethod(Callable.From<float>(UpdateShaderValue), GetCurrentShaderValue(), 1f, 0.2);
+        _hoverTween.TweenProperty(_visuals, "position", new Vector2(0f, 3f), 0.2);
+        _hoverTween.TweenProperty(_label, "modulate", Colors.DarkGray, 0.2);
     }
 
     protected override void OnRelease()
@@ -183,9 +176,11 @@ internal sealed class CombatAutoModeButton : NButton
 
         FocusMode = _templateButton.FocusMode;
         MouseFilter = MouseFilterEnum.Stop;
-        Size = _templateButton.Size * ButtonScale;
-        CustomMinimumSize = Size;
-        PivotOffset = Size * 0.5f;
+
+        Vector2 sourceSize = _templateButton.Size * ButtonScale;
+        Size = sourceSize;
+        CustomMinimumSize = sourceSize;
+        PivotOffset = sourceSize * 0.5f;
 
         Control visuals = (Control)_templateButton.GetNode("Visuals").Duplicate();
         visuals.Name = "Visuals";
@@ -196,66 +191,20 @@ internal sealed class CombatAutoModeButton : NButton
 
         _image = visuals.GetNode<TextureRect>("Image");
         _label = visuals.GetNode<MegaLabel>("Label");
+
         _shader = (ShaderMaterial)((ShaderMaterial)_image.Material).Duplicate();
         _image.Material = _shader;
     }
 
-    private void RefreshLayout(bool force = false)
-    {
-        Vector2 target = GetTargetPosition(_visibilityState);
-        if (!force && Position == target)
-        {
-            return;
-        }
-
-        _positionTween?.Kill();
-        Position = target;
-    }
-
-    private void SetVisibilityState(VisibilityState newState)
-    {
-        if (_visibilityState == newState)
-        {
-            return;
-        }
-
-        _visibilityState = newState;
-        _positionTween?.Kill();
-        _positionTween = CreateTween();
-        _positionTween.TweenProperty(this, "position", GetTargetPosition(_visibilityState), 0.35)
-            .SetEase(Tween.EaseType.Out)
-            .SetTrans(Tween.TransitionType.Expo);
-
-        if (_visibilityState == VisibilityState.Hidden && IsEnabled)
-        {
-            Disable();
-        }
-    }
-
-    private bool ShouldShowButton()
-    {
-        if (_autoButton == null || CombatManager.Instance == null || !CombatManager.Instance.IsInProgress)
-        {
-            return false;
-        }
-
-        if (NCombatRoom.Instance == null || NCombatRoom.Instance.Mode != CombatRoomMode.ActiveCombat)
-        {
-            return false;
-        }
-
-        return NCombatRoom.Instance.Ui != null;
-    }
-
-    private Vector2 GetTargetPosition(VisibilityState state)
+    private void RefreshLayout()
     {
         if (_autoButton == null)
         {
-            return Position;
+            return;
         }
 
-        Vector2 anchor = state == VisibilityState.Visible ? _autoButton.ModeAnchorShowPosition : _autoButton.ModeAnchorHidePosition;
-        return anchor + new Vector2(-(Size.X + AnchorOffset.X), AnchorOffset.Y);
+        float yOffset = (_autoButton.Size.Y - Size.Y) * 0.5f;
+        Position = _autoButton.Position + new Vector2(-(Size.X + HorizontalGap), yOffset);
     }
 
     private void RefreshLabel()
