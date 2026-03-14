@@ -244,6 +244,7 @@ internal sealed class CombatHostedBattleButton : NButton
         _viewport = GetViewport();
         ConnectLayoutSignals();
         ConnectLifecycleSignals();
+        SetProcess(true);
         Disable();
         RefreshLayout(force: true);
         RefreshVisualState(force: true);
