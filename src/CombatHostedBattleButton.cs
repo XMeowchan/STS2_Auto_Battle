@@ -242,6 +242,7 @@ internal sealed class CombatHostedBattleButton : NButton
         BuildFromTemplate();
         ConnectSignals();
         _viewport = GetViewport();
+        TopLevel = true;
         ConnectLayoutSignals();
         ConnectLifecycleSignals();
         SetProcess(true);
@@ -257,7 +258,7 @@ internal sealed class CombatHostedBattleButton : NButton
         {
             if (_templateButton == null)
             {
-                return GlobalPosition;
+                return Position;
             }
 
             Vector2 templatePos = _templateButton.GlobalPosition;
@@ -327,7 +328,7 @@ internal sealed class CombatHostedBattleButton : NButton
         _lastViewportSize = viewportSize;
 
         _positionTween?.Kill();
-        GlobalPosition = _visibilityState == VisibilityState.Visible ? ShowPos : HidePos;
+        Position = _visibilityState == VisibilityState.Visible ? ShowPos : HidePos;
     }
 
     private void ConnectLayoutSignals()
@@ -420,7 +421,7 @@ internal sealed class CombatHostedBattleButton : NButton
     {
         _positionTween?.Kill();
         _positionTween = CreateTween();
-        _positionTween.TweenProperty(this, "global_position", ShowPos, 0.5)
+        _positionTween.TweenProperty(this, "position", ShowPos, 0.5)
             .SetEase(Tween.EaseType.Out)
             .SetTrans(Tween.TransitionType.Back);
     }
@@ -429,7 +430,7 @@ internal sealed class CombatHostedBattleButton : NButton
     {
         _positionTween?.Kill();
         _positionTween = CreateTween();
-        _positionTween.TweenProperty(this, "global_position", HidePos, 0.5)
+        _positionTween.TweenProperty(this, "position", HidePos, 0.5)
             .SetEase(Tween.EaseType.Out)
             .SetTrans(Tween.TransitionType.Expo);
     }
