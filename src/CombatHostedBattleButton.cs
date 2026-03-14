@@ -536,7 +536,8 @@ internal sealed class CombatHostedBattleButton : NButton
             return _templateButton.Position;
         }
 
-        return _templateButton.GlobalPosition - parentControl.GlobalPosition;
+        Transform2D inverseParentTransform = parentControl.GetGlobalTransform().AffineInverse();
+        return inverseParentTransform * _templateButton.GlobalPosition;
     }
 
     private float GetCurrentShaderValue()
