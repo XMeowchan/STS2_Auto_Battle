@@ -32,6 +32,7 @@ internal sealed class CombatHostedBattleButton : NButton
     private const string ActiveLabelKey = "button.active";
     private const string ToastEnabledKey = "toast.enabled";
     private const string ToastDisabledKey = "toast.disabled";
+    private static readonly Vector2 PingShowPos = new(1536f, 932f);
 
     private static readonly Dictionary<string, string> FallbackTranslations = new(StringComparer.Ordinal)
     {
@@ -57,8 +58,8 @@ internal sealed class CombatHostedBattleButton : NButton
     private NPingButton? _templateButton;
     private Viewport? _viewport;
     private VisibilityState _visibilityState = VisibilityState.Hidden;
-    private Vector2 _lastTemplatePosition = new(float.NaN, float.NaN);
     private Vector2 _lastTemplateSize = new(float.NaN, float.NaN);
+    private Vector2 _lastViewportSize = new(float.NaN, float.NaN);
     private float _xOffset = DefaultButtonOffset;
 
     protected override string[] Hotkeys => Array.Empty<string>();
@@ -218,7 +219,14 @@ internal sealed class CombatHostedBattleButton : NButton
             .SetTrans(Tween.TransitionType.Expo);
     }
 
-    private Vector2 ShowPos => GetTemplatePosition() - new Vector2(_xOffset, 0f);
+    private Vector2 ShowPos
+    {
+        get
+        {
+            Viewport viewport = _viewport ?? GetViewport();
+            return ((PingShowPos - new Vector2(_xOffset, 0f)) / NGame.devResolution) * viewport.GetVisibleRect().Size;
+        }
+    }
 
     private Vector2 HidePos => ShowPos + HiddenYOffset;
 
@@ -264,15 +272,15 @@ internal sealed class CombatHostedBattleButton : NButton
             return;
         }
 
-        Vector2 templatePosition = _templateButton.Position;
         Vector2 templateSize = _templateButton.Size;
-        if (!force && templatePosition == _lastTemplatePosition && templateSize == _lastTemplateSize)
+        Vector2 viewportSize = (_viewport ?? GetViewport()).GetVisibleRect().Size;
+        if (!force && templateSize == _lastTemplateSize && viewportSize == _lastViewportSize)
         {
             return;
         }
 
-        _lastTemplatePosition = templatePosition;
         _lastTemplateSize = templateSize;
+        _lastViewportSize = viewportSize;
         if (templateSize.X > 1f)
         {
             _xOffset = templateSize.X + ButtonGap;
@@ -292,11 +300,6 @@ internal sealed class CombatHostedBattleButton : NButton
         Callable refreshCallable = Callable.From(OnLayoutChanged);
         _templateButton.Connect("item_rect_changed", refreshCallable);
         _viewport?.Connect("size_changed", refreshCallable);
-    }
-
-    private Vector2 GetTemplatePosition()
-    {
-        return _templateButton?.Position ?? Position;
     }
 
     private void OnLayoutChanged()
