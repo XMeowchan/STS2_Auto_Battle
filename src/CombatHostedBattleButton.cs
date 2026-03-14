@@ -24,7 +24,8 @@ internal sealed class CombatHostedBattleButton : NButton
         Visible
     }
 
-    private const float ButtonGap = 20f;
+    private const float ButtonGap = 8f;
+    private const float ButtonScale = 0.84f;
     private const string DefaultLocale = "en_us";
     private const string LocalizationBasePath = "res://CombatAutoHost/localization";
     private const string InactiveLabelKey = "button.inactive";
@@ -61,6 +62,7 @@ internal sealed class CombatHostedBattleButton : NButton
     private Callable? _treeExitingCallable;
     private VisibilityState _visibilityState = VisibilityState.Hidden;
     private Vector2 _lastTemplatePosition = new(float.NaN, float.NaN);
+    private Vector2 _lastTemplateGlobalPosition = new(float.NaN, float.NaN);
     private Vector2 _lastTemplateSize = new(float.NaN, float.NaN);
     private Vector2 _lastViewportSize = new(float.NaN, float.NaN);
 
@@ -118,7 +120,13 @@ internal sealed class CombatHostedBattleButton : NButton
             return;
         }
 
-        _image.Modulate = Colors.White;
+        _image.Modulate = _autoPilot.IsActive ? new Color(1f, 0.97f, 0.88f, 1f) : Colors.White;
+        if (_glow != null)
+        {
+            Color glowColor = Colors.White;
+            glowColor.A = _autoPilot.IsActive ? 0.95f : 0.08f;
+            _glow.Modulate = glowColor;
+        }
         _label.Modulate = GetIdleLabelColor();
         RefreshVisualState(force: true);
     }
@@ -251,7 +259,9 @@ internal sealed class CombatHostedBattleButton : NButton
                 return Position;
             }
 
-            return _templateButton.Position + new Vector2(0f, -GetVerticalSpacing());
+            Vector2 templatePos = GetTemplateLocalPosition();
+            float xOffset = (_templateButton.Size.X - GetScaledTemplateSize().X) * 0.5f;
+            return templatePos + new Vector2(xOffset, -GetVerticalSpacing());
         }
     }
 
@@ -270,6 +280,7 @@ internal sealed class CombatHostedBattleButton : NButton
         Size = _templateButton.Size;
         CustomMinimumSize = _templateButton.CustomMinimumSize;
         PivotOffset = _templateButton.PivotOffset;
+        Scale = new Vector2(ButtonScale, ButtonScale);
 
         Control visuals = (Control)_templateButton.GetNode("Visuals").Duplicate();
         visuals.Name = "Visuals";
@@ -297,14 +308,20 @@ internal sealed class CombatHostedBattleButton : NButton
         }
 
         Vector2 templatePosition = _templateButton.Position;
+        Vector2 templateGlobalPosition = _templateButton.GlobalPosition;
         Vector2 templateSize = _templateButton.Size;
         Vector2 viewportSize = (_viewport ?? GetViewport()).GetVisibleRect().Size;
-        if (!force && templatePosition == _lastTemplatePosition && templateSize == _lastTemplateSize && viewportSize == _lastViewportSize)
+        if (!force
+            && templatePosition == _lastTemplatePosition
+            && templateGlobalPosition == _lastTemplateGlobalPosition
+            && templateSize == _lastTemplateSize
+            && viewportSize == _lastViewportSize)
         {
             return;
         }
 
         _lastTemplatePosition = templatePosition;
+        _lastTemplateGlobalPosition = templateGlobalPosition;
         _lastTemplateSize = templateSize;
         _lastViewportSize = viewportSize;
 
@@ -457,11 +474,12 @@ internal sealed class CombatHostedBattleButton : NButton
             _label.Modulate = GetFocusedLabelColor();
         }
 
-        _image.Modulate = Colors.White;
+        _image.Modulate = _autoPilot.IsActive ? new Color(1f, 0.97f, 0.88f, 1f) : Colors.White;
         if (_glow != null)
         {
-            Color glowColor = Colors.White;
-            glowColor.A = _autoPilot.IsActive ? 0.9f : 0.18f;
+            Color glowColor = _autoPilot.IsActive
+                ? new Color(1f, 0.88f, 0.45f, 0.95f)
+                : new Color(1f, 1f, 1f, 0.08f);
             _glow.Modulate = glowColor;
         }
     }
@@ -478,23 +496,47 @@ internal sealed class CombatHostedBattleButton : NButton
 
     private float GetIdleShaderValue()
     {
-        return _autoPilot.IsActive ? 1.25f : 1f;
+        return _autoPilot.IsActive ? 1.42f : 1f;
     }
 
     private float GetFocusedShaderValue()
     {
-        return _autoPilot.IsActive ? 1.65f : 1.5f;
+        return _autoPilot.IsActive ? 1.8f : 1.5f;
     }
 
     private float GetVerticalSpacing()
     {
         if (_templateButton == null)
         {
-            return 110f;
+            return 84f;
         }
 
-        float templateHeight = _templateButton.Size.Y;
-        return (templateHeight > 1f ? templateHeight : 90f) + ButtonGap;
+        return GetScaledTemplateSize().Y + ButtonGap;
+    }
+
+    private Vector2 GetScaledTemplateSize()
+    {
+        if (_templateButton == null)
+        {
+            return new Vector2(220f, 72f);
+        }
+
+        return _templateButton.Size * ButtonScale;
+    }
+
+    private Vector2 GetTemplateLocalPosition()
+    {
+        if (_templateButton == null)
+        {
+            return Position;
+        }
+
+        if (GetParent() is not Control parentControl)
+        {
+            return _templateButton.Position;
+        }
+
+        return _templateButton.GlobalPosition - parentControl.GlobalPosition;
     }
 
     private float GetCurrentShaderValue()
