@@ -48,7 +48,7 @@ internal static class CombatUiInjector
             return;
         }
 
-        NPingButton? template = ui.GetNodeOrNull<NPingButton>("%PingButton");
+        NEndTurnButton? template = ui.GetNodeOrNull<NEndTurnButton>("%EndTurnButton");
         CombatHostedBattleButton button = CombatHostedBattleButton.Create(template);
         button.Name = ButtonName;
 
