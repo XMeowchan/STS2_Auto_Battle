@@ -1,0 +1,6 @@
+{
+  "button.inactive": "AUTO",
+  "button.active": "AUTO ON",
+  "toast.enabled": "Combat Auto Host Enabled",
+  "toast.disabled": "Combat Auto Host Disabled"
+}

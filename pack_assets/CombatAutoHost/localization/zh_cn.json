@@ -1,0 +1,6 @@
+{
+  "button.inactive": "\u6258\u7ba1",
+  "button.active": "\u6258\u7ba1\u4e2d",
+  "toast.enabled": "\u6218\u6597\u6258\u7ba1\u5df2\u5f00\u542f",
+  "toast.disabled": "\u6218\u6597\u6258\u7ba1\u5df2\u5173\u95ed"
+}

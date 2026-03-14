@@ -1,0 +1,7 @@
+bin/
+obj/
+.godot/
+dist/
+.vs/
+*.user
+*.suo
