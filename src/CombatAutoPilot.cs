@@ -29,6 +29,8 @@ internal sealed class CombatAutoPilot : IDisposable
     private const int QueuePollDelayMs = 30;
     private const int QueueWaitTimeoutMs = 4000;
 
+    private readonly IAutoPlayPolicy _policy = new ComboAwareAutoPlayPolicy();
+
     private CancellationTokenSource? _cts;
     private int _runVersion;
 
@@ -107,17 +109,18 @@ internal sealed class CombatAutoPilot : IDisposable
 
                 while (!ct.IsCancellationRequested && cardsPlayed < MaxCardsPerTurn && CanAutoPlayNow())
                 {
-                    CardModel? nextCard = GetNextPlayableCard(player, attemptedCards);
-                    if (nextCard == null)
+                    CardEvaluationResult? nextPlay = _policy.PickBestCandidate(player, attemptedCards);
+                    if (nextPlay == null || nextPlay.TotalScore < _policy.GetTurnEndThreshold(AutoPlaySettingsStore.CurrentMode))
                     {
                         break;
                     }
 
+                    CardModel nextCard = nextPlay.Candidate.Card;
                     attemptedCards.Add(nextCard);
 
                     try
                     {
-                        if (TryQueueCardPlay(nextCard))
+                        if (TryQueueCardPlay(nextPlay.Candidate))
                         {
                             playedAnyCard = true;
                             cardsPlayed++;
@@ -191,29 +194,9 @@ internal sealed class CombatAutoPilot : IDisposable
         return LocalContext.GetMe(state);
     }
 
-    private static CardModel? GetNextPlayableCard(Player player, HashSet<CardModel> attemptedCards)
+    private static bool TryQueueCardPlay(CardCandidate candidate)
     {
-        CardPile hand = PileType.Hand.GetPile(player);
-        foreach (CardModel card in hand.Cards)
-        {
-            if (attemptedCards.Contains(card))
-            {
-                continue;
-            }
-
-            if (card.CanPlay(out _, out _))
-            {
-                return card;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool TryQueueCardPlay(CardModel card)
-    {
-        Creature? target = GetPreferredTarget(card);
-        return card.TryManualPlay(target);
+        return candidate.Card.TryManualPlay(candidate.Target);
     }
 
     private static async Task WaitForQueuedPlayAsync(CardModel card, CancellationToken ct)
@@ -239,30 +222,6 @@ internal sealed class CombatAutoPilot : IDisposable
             await Task.Delay(QueuePollDelayMs, ct);
             waitedMs += QueuePollDelayMs;
         }
-    }
-
-    private static Creature? GetPreferredTarget(CardModel card)
-    {
-        if (card.TargetType != TargetType.AnyEnemy)
-        {
-            return null;
-        }
-
-        CombatState? combatState = card.CombatState;
-        if (combatState == null)
-        {
-            return null;
-        }
-
-        foreach (Creature enemy in combatState.HittableEnemies)
-        {
-            if (enemy.IsAlive)
-            {
-                return enemy;
-            }
-        }
-
-        return null;
     }
 
     private static bool CanAutoPlayNow()

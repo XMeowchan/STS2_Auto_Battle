@@ -270,6 +270,12 @@ internal sealed class CombatHostedBattleButton : NButton
 
     private Vector2 HidePos => ShowPos + HiddenYOffset;
 
+    internal Vector2 ModeAnchorShowPosition => ShowPos;
+
+    internal Vector2 ModeAnchorHidePosition => HidePos;
+
+    internal Vector2 ModeAnchorSize => Size;
+
     private void BuildFromTemplate()
     {
         _templateButton ??= GetParent()?.GetNodeOrNull<NEndTurnButton>("%EndTurnButton");

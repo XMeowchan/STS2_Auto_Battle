@@ -2,5 +2,8 @@
   "button.inactive": "AUTO",
   "button.active": "AUTO ON",
   "toast.enabled": "Combat Auto Host Enabled",
-  "toast.disabled": "Combat Auto Host Disabled"
+  "toast.disabled": "Combat Auto Host Disabled",
+  "toast.mode_balanced": "Autoplay Mode: Balanced",
+  "toast.mode_defensive": "Autoplay Mode: Defensive",
+  "toast.mode_aggressive": "Autoplay Mode: Aggressive"
 }
