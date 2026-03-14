@@ -256,10 +256,10 @@ internal sealed class CombatHostedBattleButton : NButton
         {
             if (_templateButton == null)
             {
-                return Position;
+                return GlobalPosition;
             }
 
-            Vector2 templatePos = GetTemplateLocalPosition();
+            Vector2 templatePos = _templateButton.GlobalPosition;
             float xOffset = (_templateButton.Size.X - GetScaledTemplateSize().X) * 0.5f;
             return templatePos + new Vector2(xOffset, -GetVerticalSpacing());
         }
@@ -326,7 +326,7 @@ internal sealed class CombatHostedBattleButton : NButton
         _lastViewportSize = viewportSize;
 
         _positionTween?.Kill();
-        Position = _visibilityState == VisibilityState.Visible ? ShowPos : HidePos;
+        GlobalPosition = _visibilityState == VisibilityState.Visible ? ShowPos : HidePos;
     }
 
     private void ConnectLayoutSignals()
@@ -419,7 +419,7 @@ internal sealed class CombatHostedBattleButton : NButton
     {
         _positionTween?.Kill();
         _positionTween = CreateTween();
-        _positionTween.TweenProperty(this, "position", ShowPos, 0.5)
+        _positionTween.TweenProperty(this, "global_position", ShowPos, 0.5)
             .SetEase(Tween.EaseType.Out)
             .SetTrans(Tween.TransitionType.Back);
     }
@@ -428,7 +428,7 @@ internal sealed class CombatHostedBattleButton : NButton
     {
         _positionTween?.Kill();
         _positionTween = CreateTween();
-        _positionTween.TweenProperty(this, "position", HidePos, 0.5)
+        _positionTween.TweenProperty(this, "global_position", HidePos, 0.5)
             .SetEase(Tween.EaseType.Out)
             .SetTrans(Tween.TransitionType.Expo);
     }
@@ -522,22 +522,6 @@ internal sealed class CombatHostedBattleButton : NButton
         }
 
         return _templateButton.Size * ButtonScale;
-    }
-
-    private Vector2 GetTemplateLocalPosition()
-    {
-        if (_templateButton == null)
-        {
-            return Position;
-        }
-
-        if (GetParent() is not Control parentControl)
-        {
-            return _templateButton.Position;
-        }
-
-        Transform2D inverseParentTransform = parentControl.GetGlobalTransform().AffineInverse();
-        return inverseParentTransform * _templateButton.GlobalPosition;
     }
 
     private float GetCurrentShaderValue()
