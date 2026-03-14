@@ -21,6 +21,22 @@ internal static class CombatUiReadyPatch
     }
 }
 
+[HarmonyPatch(typeof(NCombatUi), nameof(NCombatUi.Activate))]
+internal static class CombatUiActivatePatch
+{
+    private static void Postfix(NCombatUi __instance)
+    {
+        try
+        {
+            CombatUiInjector.Attach(__instance);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"CombatAutoHost: failed to attach battle host button during activate.\n{ex}");
+        }
+    }
+}
+
 internal static class CombatUiInjector
 {
     private const string ButtonName = "CombatAutoHostButton";
@@ -41,5 +57,8 @@ internal static class CombatUiInjector
         {
             ui.MoveChild(button, template.GetIndex());
         }
+
+        button.InitializeButton();
+        Log.Info("CombatAutoHost: attached auto button to combat UI.");
     }
 }

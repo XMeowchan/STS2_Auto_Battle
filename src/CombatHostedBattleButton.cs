@@ -49,6 +49,7 @@ internal sealed class CombatHostedBattleButton : NButton
 
     private readonly CombatAutoPilot _autoPilot = new();
 
+    private bool _initialized;
     private Control? _visuals;
     private TextureRect? _image;
     private MegaLabel? _label;
@@ -57,6 +58,8 @@ internal sealed class CombatHostedBattleButton : NButton
     private Tween? _hoverTween;
     private NPingButton? _templateButton;
     private Viewport? _viewport;
+    private Callable? _processFrameCallable;
+    private Callable? _treeExitingCallable;
     private VisibilityState _visibilityState = VisibilityState.Hidden;
     private Vector2 _lastTemplateSize = new(float.NaN, float.NaN);
     private Vector2 _lastViewportSize = new(float.NaN, float.NaN);
@@ -74,26 +77,17 @@ internal sealed class CombatHostedBattleButton : NButton
 
     public override void _Ready()
     {
-        BuildFromTemplate();
-        ConnectSignals();
-        _viewport = GetViewport();
-        ConnectLayoutSignals();
-        SetProcess(true);
-        Disable();
-        RefreshLayout(force: true);
-        RefreshVisualState(force: true);
+        InitializeButton();
     }
 
     public override void _EnterTree()
     {
         base._EnterTree();
-        _autoPilot.StateChanged += OnAutoPilotStateChanged;
     }
 
     public override void _ExitTree()
     {
-        _autoPilot.StateChanged -= OnAutoPilotStateChanged;
-        _autoPilot.Dispose();
+        TearDown();
         base._ExitTree();
     }
 
@@ -219,6 +213,27 @@ internal sealed class CombatHostedBattleButton : NButton
             .SetTrans(Tween.TransitionType.Expo);
     }
 
+    internal void InitializeButton()
+    {
+        if (_initialized)
+        {
+            return;
+        }
+
+        _initialized = true;
+        _autoPilot.StateChanged += OnAutoPilotStateChanged;
+
+        BuildFromTemplate();
+        ConnectSignals();
+        _viewport = GetViewport();
+        ConnectLayoutSignals();
+        ConnectLifecycleSignals();
+        Disable();
+        RefreshLayout(force: true);
+        RefreshVisualState(force: true);
+        Log.Info("CombatAutoHost: button initialized.");
+    }
+
     private Vector2 ShowPos
     {
         get
@@ -302,6 +317,21 @@ internal sealed class CombatHostedBattleButton : NButton
         _viewport?.Connect("size_changed", refreshCallable);
     }
 
+    private void ConnectLifecycleSignals()
+    {
+        SceneTree? tree = GetTree();
+        if (tree == null)
+        {
+            return;
+        }
+
+        _processFrameCallable ??= Callable.From(OnProcessFrame);
+        _treeExitingCallable ??= Callable.From(OnTreeExitingSignal);
+
+        tree.Connect("process_frame", _processFrameCallable.Value);
+        Connect("tree_exiting", _treeExitingCallable.Value);
+    }
+
     private void OnLayoutChanged()
     {
         CallDeferred(nameof(RefreshLayoutDeferred));
@@ -310,6 +340,32 @@ internal sealed class CombatHostedBattleButton : NButton
     private void RefreshLayoutDeferred()
     {
         RefreshLayout(force: true);
+    }
+
+    private void OnProcessFrame()
+    {
+        bool shouldShow = ShouldShowButton();
+        if (!shouldShow)
+        {
+            if (_autoPilot.IsActive)
+            {
+                _autoPilot.Stop();
+            }
+
+            SetVisibilityState(VisibilityState.Hidden);
+            return;
+        }
+
+        SetVisibilityState(VisibilityState.Visible);
+        if (!IsEnabled)
+        {
+            Enable();
+        }
+    }
+
+    private void OnTreeExitingSignal()
+    {
+        TearDown();
     }
 
     private void SetVisibilityState(VisibilityState newState)
@@ -545,6 +601,29 @@ internal sealed class CombatHostedBattleButton : NButton
         {
             Log.Warn($"CombatAutoHost: failed to load localization '{path}': {ex.Message}");
             return null;
+        }
+    }
+
+    private void TearDown()
+    {
+        if (!_initialized)
+        {
+            return;
+        }
+
+        _initialized = false;
+        _autoPilot.StateChanged -= OnAutoPilotStateChanged;
+        _autoPilot.Dispose();
+
+        SceneTree? tree = GetTree();
+        if (tree != null && _processFrameCallable != null && tree.IsConnected("process_frame", _processFrameCallable.Value))
+        {
+            tree.Disconnect("process_frame", _processFrameCallable.Value);
+        }
+
+        if (_treeExitingCallable != null && IsConnected("tree_exiting", _treeExitingCallable.Value))
+        {
+            Disconnect("tree_exiting", _treeExitingCallable.Value);
         }
     }
 }
