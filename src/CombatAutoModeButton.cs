@@ -22,7 +22,7 @@ internal sealed class CombatAutoModeButton : NButton
 
     private const float ButtonScale = 0.56f;
     private static readonly StringName ShaderValueKey = new("v");
-    private static readonly Vector2 AnchorOffset = new(24f, 10f);
+    private static readonly Vector2 AnchorOffset = new(-18f, 10f);
 
     private CombatHostedBattleButton? _autoButton;
     private NEndTurnButton? _templateButton;
@@ -255,7 +255,7 @@ internal sealed class CombatAutoModeButton : NButton
         }
 
         Vector2 anchor = state == VisibilityState.Visible ? _autoButton.ModeAnchorShowPosition : _autoButton.ModeAnchorHidePosition;
-        return anchor + new Vector2(_autoButton.ModeAnchorSize.X + AnchorOffset.X, AnchorOffset.Y);
+        return anchor + new Vector2(-(Size.X + AnchorOffset.X), AnchorOffset.Y);
     }
 
     private void RefreshLabel()
