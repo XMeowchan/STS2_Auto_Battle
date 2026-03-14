@@ -8,10 +8,10 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
-using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using MegaCrit.Sts2.Core.Rooms;
@@ -26,6 +26,8 @@ internal sealed class CombatAutoPilot : IDisposable
     private const int PostCardDelayMs = 120;
     private const int SuccessfulTurnDelayMs = 180;
     private const int EmptyTurnDelayMs = 250;
+    private const int QueuePollDelayMs = 30;
+    private const int QueueWaitTimeoutMs = 4000;
 
     private CancellationTokenSource? _cts;
     private int _runVersion;
@@ -115,9 +117,12 @@ internal sealed class CombatAutoPilot : IDisposable
 
                     try
                     {
-                        await CardCmd.AutoPlay(new BlockingPlayerChoiceContext(), nextCard, GetPreferredTarget(nextCard));
-                        playedAnyCard = true;
-                        cardsPlayed++;
+                        if (TryQueueCardPlay(nextCard))
+                        {
+                            playedAnyCard = true;
+                            cardsPlayed++;
+                            await WaitForQueuedPlayAsync(nextCard, ct);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -203,6 +208,37 @@ internal sealed class CombatAutoPilot : IDisposable
         }
 
         return null;
+    }
+
+    private static bool TryQueueCardPlay(CardModel card)
+    {
+        Creature? target = GetPreferredTarget(card);
+        return card.TryManualPlay(target);
+    }
+
+    private static async Task WaitForQueuedPlayAsync(CardModel card, CancellationToken ct)
+    {
+        bool sawQueueOrHandExit = false;
+        int waitedMs = 0;
+
+        while (!ct.IsCancellationRequested && waitedMs < QueueWaitTimeoutMs)
+        {
+            bool isQueued = NCardPlayQueue.Instance?.GetCardNode(card) != null;
+            bool isStillInHand = card.Pile?.Type == PileType.Hand;
+
+            if (isQueued || !isStillInHand)
+            {
+                sawQueueOrHandExit = true;
+            }
+
+            if (sawQueueOrHandExit && !isQueued)
+            {
+                return;
+            }
+
+            await Task.Delay(QueuePollDelayMs, ct);
+            waitedMs += QueuePollDelayMs;
+        }
     }
 
     private static Creature? GetPreferredTarget(CardModel card)
