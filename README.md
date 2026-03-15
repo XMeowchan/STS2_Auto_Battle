@@ -82,10 +82,14 @@ If the variables are not set, the scripts still try to auto-detect both paths on
 
 - Push a tag like `v0.2.0` to trigger `Publish Release`
 - Or run the `Publish Release` workflow manually and provide a tag name
-- The workflow builds the mod, creates `dist/CombatAutoHost-<version>.zip`, and uploads it to the GitHub release
+- Each release now ships:
+  - `CombatAutoHost-Setup-<version>.exe`
+  - `CombatAutoHost-portable-<version>.zip`
 
-You can also package locally after building:
+You can build both release artifacts locally with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\package-release.ps1 -Configuration Release
+powershell -ExecutionPolicy Bypass -File .\scripts\publish-release.ps1
 ```
+
+More release details are documented in `RELEASING.md`.
