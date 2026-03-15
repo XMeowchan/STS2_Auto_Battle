@@ -35,6 +35,7 @@ internal sealed record CardEvaluationResult(CardCandidate Candidate, decimal Imm
 internal interface IAutoPlayPolicy
 {
     CardEvaluationResult? PickBestCandidate(Player player, HashSet<CardModel> attemptedCards);
+    CardEvaluationResult? PickFallbackCandidate(Player player, HashSet<CardModel> attemptedCards);
     decimal GetTurnEndThreshold(AutoPlayMode mode);
 }
 
@@ -215,6 +216,55 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
         return best;
     }
 
+    public CardEvaluationResult? PickFallbackCandidate(Player player, HashSet<CardModel> attemptedCards)
+    {
+        AutoPlayContext context = AutoPlayContext.Create(player);
+
+        CardEvaluationResult? bestBlockCandidate = null;
+        int bestPreventedDamage = -1;
+        int bestBlockResourceSpend = -1;
+        int bestBlockExtraValue = -1;
+
+        CardEvaluationResult? bestSpendCandidate = null;
+        int bestSpend = -1;
+        int bestSpendValue = -1;
+
+        foreach (CardCandidate candidate in EnumerateCandidates(context, attemptedCards))
+        {
+            CandidateMetrics metrics = AutoPlayScoring.BuildMetrics(context, candidate);
+            CardEvaluationResult result = EvaluateCandidate(context, candidate, metrics);
+
+            int resourceSpend = metrics.EnergyCost + metrics.StarCost;
+            int extraValue = metrics.TotalBlock + metrics.EffectiveDamageTotal + metrics.Cards * 2;
+
+            if (context.ThreatenedHpLoss > 0 && metrics.TotalBlock > 0)
+            {
+                int preventedDamage = Math.Min(metrics.TotalBlock, context.ThreatenedHpLoss);
+                if (preventedDamage > bestPreventedDamage
+                    || (preventedDamage == bestPreventedDamage && resourceSpend > bestBlockResourceSpend)
+                    || (preventedDamage == bestPreventedDamage && resourceSpend == bestBlockResourceSpend && extraValue > bestBlockExtraValue)
+                    || (preventedDamage == bestPreventedDamage && resourceSpend == bestBlockResourceSpend && extraValue == bestBlockExtraValue && (bestBlockCandidate == null || result.TotalScore > bestBlockCandidate.TotalScore)))
+                {
+                    bestPreventedDamage = preventedDamage;
+                    bestBlockResourceSpend = resourceSpend;
+                    bestBlockExtraValue = extraValue;
+                    bestBlockCandidate = result;
+                }
+            }
+
+            if (resourceSpend > bestSpend
+                || (resourceSpend == bestSpend && extraValue > bestSpendValue)
+                || (resourceSpend == bestSpend && extraValue == bestSpendValue && (bestSpendCandidate == null || result.TotalScore > bestSpendCandidate.TotalScore)))
+            {
+                bestSpend = resourceSpend;
+                bestSpendValue = extraValue;
+                bestSpendCandidate = result;
+            }
+        }
+
+        return bestBlockCandidate ?? bestSpendCandidate;
+    }
+
     public decimal GetTurnEndThreshold(AutoPlayMode mode) => mode switch
     {
         AutoPlayMode.Defensive => -8m,
@@ -277,6 +327,11 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
     private static CardEvaluationResult EvaluateCandidate(AutoPlayContext context, CardCandidate candidate)
     {
         CandidateMetrics metrics = AutoPlayScoring.BuildMetrics(context, candidate);
+        return EvaluateCandidate(context, candidate, metrics);
+    }
+
+    private static CardEvaluationResult EvaluateCandidate(AutoPlayContext context, CardCandidate candidate, CandidateMetrics metrics)
+    {
         CardEvaluationState state = new() { ImmediateScore = AutoPlayScoring.ScoreImmediate(context, metrics) };
         AutoPlayScoring.AddImmediateReasons(metrics, state);
         foreach (IComboRule rule in ComboRules)

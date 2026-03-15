@@ -78,11 +78,24 @@ internal static class AutoPlayScoring
         if (threatenedHpLoss > 0)
         {
             int preventedHpLoss = Math.Min(metrics.TotalBlock, threatenedHpLoss);
-            score += preventedHpLoss * (context.Mode == AutoPlayMode.Aggressive ? 18m : 28m);
-
-            if (metrics.TotalBlock == 0 && !metrics.HasLethal)
+            decimal preventedHpLossWeight = context.Mode switch
             {
-                score -= threatenedHpLoss * (context.Mode == AutoPlayMode.Aggressive ? 6m : 16m);
+                AutoPlayMode.Defensive => 22m,
+                AutoPlayMode.Aggressive => 14m,
+                _ => 18m
+            };
+            score += preventedHpLoss * preventedHpLossWeight;
+
+            if (!metrics.HasLethal)
+            {
+                int unblockedHpLoss = Math.Max(0, threatenedHpLoss - metrics.TotalBlock);
+                decimal unblockedHpLossWeight = context.Mode switch
+                {
+                    AutoPlayMode.Defensive => 6.5m,
+                    AutoPlayMode.Aggressive => 3m,
+                    _ => 4.5m
+                };
+                score -= unblockedHpLoss * unblockedHpLossWeight;
             }
         }
 

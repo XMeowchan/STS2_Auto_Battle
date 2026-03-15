@@ -111,9 +111,19 @@ internal sealed class CombatAutoPilot : IDisposable
                 while (!ct.IsCancellationRequested && cardsPlayed < MaxCardsPerTurn && CanAutoPlayNow())
                 {
                     CardEvaluationResult? nextPlay = _policy.PickBestCandidate(player, attemptedCards);
-                    if (nextPlay == null || nextPlay.TotalScore < _policy.GetTurnEndThreshold(AutoPlaySettingsStore.CurrentMode))
+                    if (nextPlay == null)
                     {
                         break;
+                    }
+
+                    decimal turnEndThreshold = _policy.GetTurnEndThreshold(AutoPlaySettingsStore.CurrentMode);
+                    if (nextPlay.TotalScore < turnEndThreshold && !ShouldForcePlay(nextPlay, playedAnyCard))
+                    {
+                        nextPlay = _policy.PickFallbackCandidate(player, attemptedCards);
+                        if (nextPlay == null)
+                        {
+                            break;
+                        }
                     }
 
                     CardModel nextCard = nextPlay.Candidate.Card;
@@ -198,6 +208,34 @@ internal sealed class CombatAutoPilot : IDisposable
     private static bool TryQueueCardPlay(CardCandidate candidate)
     {
         return candidate.Card.TryManualPlay(candidate.Target);
+    }
+
+    private static bool ShouldForcePlay(CardEvaluationResult evaluation, bool playedAnyCard)
+    {
+        const CardReasonFlags actionableFlags =
+            CardReasonFlags.Lethal |
+            CardReasonFlags.Damage |
+            CardReasonFlags.Block |
+            CardReasonFlags.Draw |
+            CardReasonFlags.Debuff |
+            CardReasonFlags.Buff |
+            CardReasonFlags.Power;
+
+        CardModel card = evaluation.Candidate.Card;
+        bool hasActionableValue = (evaluation.ReasonFlags & actionableFlags) != 0;
+        bool isEthereal = card.Keywords.Contains(CardKeyword.Ethereal);
+
+        if (evaluation.TotalScore >= -24m && hasActionableValue)
+        {
+            return true;
+        }
+
+        if (!playedAnyCard && evaluation.TotalScore >= -42m && (hasActionableValue || isEthereal))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static async Task WaitForQueuedPlayAsync(CardModel card, CancellationToken ct)
