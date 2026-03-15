@@ -74,6 +74,18 @@ internal static class AutoPlayScoring
             score += weights.PowerWeight * roundMultiplier;
         }
 
+        int threatenedHpLoss = context.ThreatenedHpLoss;
+        if (threatenedHpLoss > 0)
+        {
+            int preventedHpLoss = Math.Min(metrics.TotalBlock, threatenedHpLoss);
+            score += preventedHpLoss * (context.Mode == AutoPlayMode.Aggressive ? 18m : 28m);
+
+            if (metrics.TotalBlock == 0 && !metrics.HasLethal)
+            {
+                score -= threatenedHpLoss * (context.Mode == AutoPlayMode.Aggressive ? 6m : 16m);
+            }
+        }
+
         if (metrics.EnergyCost + metrics.StarCost > 0)
         {
             score += metrics.EnergyCost * 9m;

@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 
 namespace CombatAutoHost;
 
@@ -104,6 +105,7 @@ internal sealed class AutoPlayContext
     public required int CurrentBlock { get; init; }
     public required int CurrentHp { get; init; }
     public required int MaxHp { get; init; }
+    public required int IncomingAttackDamage { get; init; }
     public required int RoundNumber { get; init; }
     public required int CardsPlayedThisTurn { get; init; }
     public required int AttacksPlayedThisTurn { get; init; }
@@ -112,6 +114,8 @@ internal sealed class AutoPlayContext
     public required int AttacksPlayedThisCombat { get; init; }
     public required int EtherealPlayedThisCombat { get; init; }
     public required bool GainedBlockThisCombat { get; init; }
+
+    public int ThreatenedHpLoss => Math.Max(0, IncomingAttackDamage - CurrentBlock);
 
     public T? GetRelic<T>() where T : RelicModel => Player.GetRelic<T>();
     public bool HasRelic<T>() where T : RelicModel => GetRelic<T>() != null;
@@ -155,6 +159,7 @@ internal sealed class AutoPlayContext
             CurrentBlock = player.Creature.Block,
             CurrentHp = player.Creature.CurrentHp,
             MaxHp = Math.Max(1, player.Creature.MaxHp),
+            IncomingAttackDamage = CalculateIncomingAttackDamage(player.Creature, state.HittableEnemies.Where(static creature => creature != null && creature.IsAlive).ToList()),
             RoundNumber = state.RoundNumber,
             CardsPlayedThisTurn = CombatManager.Instance.History.CardPlaysFinished.Count(entry => entry.HappenedThisTurn(state) && entry.CardPlay.Card.Owner == player),
             AttacksPlayedThisTurn = CombatManager.Instance.History.CardPlaysFinished.Count(entry => entry.HappenedThisTurn(state) && entry.CardPlay.Card.Owner == player && entry.CardPlay.Card.Type == CardType.Attack),
@@ -164,6 +169,28 @@ internal sealed class AutoPlayContext
             EtherealPlayedThisCombat = CombatManager.Instance.History.CardPlaysFinished.Count(entry => entry.CardPlay.Card.Owner == player && entry.WasEthereal),
             GainedBlockThisCombat = CombatManager.Instance.History.Entries.OfType<BlockGainedEntry>().Any(entry => entry.Receiver == player.Creature && entry.Amount > 0)
         };
+    }
+
+    private static int CalculateIncomingAttackDamage(Creature playerCreature, IReadOnlyList<Creature> enemies)
+    {
+        int total = 0;
+        foreach (Creature enemy in enemies)
+        {
+            if (enemy.Monster == null || !enemy.Monster.IntendsToAttack)
+            {
+                continue;
+            }
+
+            foreach (AbstractIntent intent in enemy.Monster.NextMove.Intents)
+            {
+                if (intent is AttackIntent attackIntent)
+                {
+                    total += attackIntent.GetTotalDamage(new[] { playerCreature }, enemy);
+                }
+            }
+        }
+
+        return total;
     }
 }
 
@@ -190,9 +217,9 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
 
     public decimal GetTurnEndThreshold(AutoPlayMode mode) => mode switch
     {
-        AutoPlayMode.Defensive => 2m,
-        AutoPlayMode.Aggressive => -4m,
-        _ => 0m
+        AutoPlayMode.Defensive => -8m,
+        AutoPlayMode.Aggressive => -20m,
+        _ => -12m
     };
 
     private static IEnumerable<CardCandidate> EnumerateCandidates(AutoPlayContext context, HashSet<CardModel> attemptedCards)
