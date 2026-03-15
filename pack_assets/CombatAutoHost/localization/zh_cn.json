@@ -5,5 +5,8 @@
   "toast.disabled": "\u6218\u6597\u6258\u7ba1\u5df2\u5173\u95ed",
   "toast.mode_balanced": "\u6258\u7ba1\u6a21\u5f0f\uff1a\u5747\u8861",
   "toast.mode_defensive": "\u6258\u7ba1\u6a21\u5f0f\uff1a\u9632\u5b88",
-  "toast.mode_aggressive": "\u6258\u7ba1\u6a21\u5f0f\uff1a\u8fdb\u653b"
+  "toast.mode_aggressive": "\u6258\u7ba1\u6a21\u5f0f\uff1a\u8fdb\u653b",
+  "toast.update_ready": "\u66f4\u65b0 {0} \u5df2\u4e0b\u8f7d\uff0c\u91cd\u542f\u6e38\u620f\u540e\u81ea\u52a8\u5e94\u7528\u3002",
+  "toast.update_installed": "\u6218\u6597\u6258\u7ba1\u5df2\u66f4\u65b0\u5230 {0}\u3002",
+  "toast.update_failed": "\u81ea\u52a8\u66f4\u65b0\u5931\u8d25\uff1a{0}"
 }

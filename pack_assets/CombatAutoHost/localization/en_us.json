@@ -5,5 +5,8 @@
   "toast.disabled": "Combat Auto Host Disabled",
   "toast.mode_balanced": "Autoplay Mode: Balanced",
   "toast.mode_defensive": "Autoplay Mode: Defensive",
-  "toast.mode_aggressive": "Autoplay Mode: Aggressive"
+  "toast.mode_aggressive": "Autoplay Mode: Aggressive",
+  "toast.update_ready": "Update {0} downloaded. Restart the game to apply it.",
+  "toast.update_installed": "Combat Auto Host updated to {0}.",
+  "toast.update_failed": "Auto-update failed: {0}"
 }

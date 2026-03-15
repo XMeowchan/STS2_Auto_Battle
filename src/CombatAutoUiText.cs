@@ -19,6 +19,9 @@ internal static class CombatAutoUiText
     public const string ToastModeBalancedKey = "toast.mode_balanced";
     public const string ToastModeDefensiveKey = "toast.mode_defensive";
     public const string ToastModeAggressiveKey = "toast.mode_aggressive";
+    public const string ToastUpdateReadyKey = "toast.update_ready";
+    public const string ToastUpdateInstalledKey = "toast.update_installed";
+    public const string ToastUpdateFailedKey = "toast.update_failed";
 
     private static readonly Dictionary<string, string> FallbackTranslations = new(StringComparer.Ordinal)
     {
@@ -28,7 +31,10 @@ internal static class CombatAutoUiText
         [ToastDisabledKey] = "Combat Auto Host Disabled",
         [ToastModeBalancedKey] = "Autoplay Mode: Balanced",
         [ToastModeDefensiveKey] = "Autoplay Mode: Defensive",
-        [ToastModeAggressiveKey] = "Autoplay Mode: Aggressive"
+        [ToastModeAggressiveKey] = "Autoplay Mode: Aggressive",
+        [ToastUpdateReadyKey] = "Update {0} downloaded. Restart the game to apply it.",
+        [ToastUpdateInstalledKey] = "Combat Auto Host updated to {0}.",
+        [ToastUpdateFailedKey] = "Auto-update failed: {0}"
     };
 
     private static Dictionary<string, string>? _cachedTranslations;
@@ -53,6 +59,12 @@ internal static class CombatAutoUiText
             AutoPlayMode.Defensive => Get(ToastModeDefensiveKey),
             _ => Get(ToastModeAggressiveKey)
         };
+    }
+
+    public static string Format(string key, params object[] args)
+    {
+        string value = Get(key);
+        return args.Length == 0 ? value : string.Format(value, args);
     }
 
     private static IReadOnlyDictionary<string, string> GetTranslations()
