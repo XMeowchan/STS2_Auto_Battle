@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
+using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 
@@ -30,7 +32,7 @@ internal enum CardReasonFlags
 
 internal readonly record struct CardCandidate(CardModel Card, Creature? Target);
 
-internal sealed record CardEvaluationResult(CardCandidate Candidate, decimal ImmediateScore, decimal ComboScore, decimal TotalScore, CardReasonFlags ReasonFlags);
+internal sealed record CardEvaluationResult(CardCandidate Candidate, CandidateMetrics Metrics, decimal ImmediateScore, decimal ComboScore, decimal TotalScore, CardReasonFlags ReasonFlags);
 
 internal interface IAutoPlayPolicy
 {
@@ -203,22 +205,58 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
     public CardEvaluationResult? PickBestCandidate(Player player, HashSet<CardModel> attemptedCards)
     {
         AutoPlayContext context = AutoPlayContext.Create(player);
-        CardEvaluationResult? best = null;
-        foreach (CardCandidate candidate in EnumerateCandidates(context, attemptedCards))
+        List<CardEvaluationResult> candidates = EvaluateCandidates(context, attemptedCards);
+        if (candidates.Count == 0)
         {
-            CardEvaluationResult result = EvaluateCandidate(context, candidate);
-            if (best == null || result.TotalScore > best.TotalScore)
-            {
-                best = result;
-            }
+            LogCandidateDecision(context, attemptedCards, candidates, null, "no_playable_candidates");
+            return null;
         }
 
-        return best;
+        CardEvaluationResult? selected = TryPickLethalCandidate(candidates);
+        string stage = "lethal";
+
+        if (selected == null)
+        {
+            selected = TryPickThreatResponseCandidate(context, candidates);
+            stage = "threat_response";
+        }
+
+        if (selected == null)
+        {
+            selected = TryPickPowerCandidate(context, candidates);
+            stage = "power";
+        }
+
+        if (selected == null)
+        {
+            selected = TryPickSetupCandidate(context, candidates);
+            stage = "setup";
+        }
+
+        if (selected == null)
+        {
+            selected = TryPickAttackCandidate(candidates);
+            stage = "attack";
+        }
+
+        selected ??= PickHighestScoreCandidate(candidates);
+        if (stage == "attack" && !ReferenceEquals(selected, candidates.FirstOrDefault(static result => result.Metrics.IsAttack)))
+        {
+            stage = "highest_score";
+        }
+
+        LogCandidateDecision(context, attemptedCards, candidates, selected, stage);
+        return selected;
     }
 
     public CardEvaluationResult? PickFallbackCandidate(Player player, HashSet<CardModel> attemptedCards)
     {
         AutoPlayContext context = AutoPlayContext.Create(player);
+        List<CardEvaluationResult> candidates = EvaluateCandidates(context, attemptedCards);
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
 
         CardEvaluationResult? bestBlockCandidate = null;
         int bestPreventedDamage = -1;
@@ -229,17 +267,22 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
         int bestSpend = -1;
         int bestSpendValue = -1;
 
-        foreach (CardCandidate candidate in EnumerateCandidates(context, attemptedCards))
+        foreach (CardEvaluationResult result in candidates)
         {
-            CandidateMetrics metrics = AutoPlayScoring.BuildMetrics(context, candidate);
-            CardEvaluationResult result = EvaluateCandidate(context, candidate, metrics);
+            CandidateMetrics metrics = result.Metrics;
 
             int resourceSpend = metrics.EnergyCost + metrics.StarCost;
-            int extraValue = metrics.TotalBlock + metrics.EffectiveDamageTotal + metrics.Cards * 2;
+            int extraValue = metrics.TotalBlock
+                + metrics.EffectiveDamageTotal
+                + metrics.Cards * 2
+                + (metrics.HasDebuff ? 4 : 0)
+                + (metrics.HasBuff ? 3 : 0)
+                + (metrics.IsPower ? 2 : 0);
+            int blockValue = Math.Max(metrics.TotalBlock, metrics.Candidate.Card.GainsBlock ? 1 : 0);
 
-            if (context.ThreatenedHpLoss > 0 && metrics.TotalBlock > 0)
+            if (context.ThreatenedHpLoss > 0 && blockValue > 0)
             {
-                int preventedDamage = Math.Min(metrics.TotalBlock, context.ThreatenedHpLoss);
+                int preventedDamage = Math.Min(blockValue, context.ThreatenedHpLoss);
                 if (preventedDamage > bestPreventedDamage
                     || (preventedDamage == bestPreventedDamage && resourceSpend > bestBlockResourceSpend)
                     || (preventedDamage == bestPreventedDamage && resourceSpend == bestBlockResourceSpend && extraValue > bestBlockExtraValue)
@@ -272,6 +315,18 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
         _ => -12m
     };
 
+    private static List<CardEvaluationResult> EvaluateCandidates(AutoPlayContext context, HashSet<CardModel> attemptedCards)
+    {
+        List<CardEvaluationResult> results = new();
+        foreach (CardCandidate candidate in EnumerateCandidates(context, attemptedCards))
+        {
+            CandidateMetrics metrics = AutoPlayScoring.BuildMetrics(context, candidate);
+            results.Add(EvaluateCandidate(context, candidate, metrics));
+        }
+
+        return results;
+    }
+
     private static IEnumerable<CardCandidate> EnumerateCandidates(AutoPlayContext context, HashSet<CardModel> attemptedCards)
     {
         foreach (CardModel card in context.HandCards)
@@ -299,19 +354,17 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
     {
         switch (card.TargetType)
         {
-            case TargetType.Self:
-                yield return card.Owner.Creature;
-                yield break;
-            case TargetType.Osty:
-                if (card.Owner.Osty != null)
+            case TargetType.AnyEnemy:
+                foreach (Creature creature in context.Enemies)
                 {
-                    yield return card.Owner.Osty;
+                    if (card.IsValidTarget(creature))
+                    {
+                        yield return creature;
+                    }
                 }
 
                 yield break;
-            case TargetType.AnyEnemy:
             case TargetType.AnyAlly:
-            case TargetType.AnyPlayer:
                 foreach (Creature creature in context.LivingCreatures)
                 {
                     if (card.IsValidTarget(creature))
@@ -320,6 +373,15 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
                     }
                 }
 
+                yield break;
+            case TargetType.Self:
+            case TargetType.AnyPlayer:
+            case TargetType.Osty:
+            case TargetType.None:
+            case TargetType.AllEnemies:
+            case TargetType.AllAllies:
+            case TargetType.RandomEnemy:
+                yield return null;
                 yield break;
         }
     }
@@ -339,11 +401,284 @@ internal sealed class ComboAwareAutoPlayPolicy : IAutoPlayPolicy
             rule.Apply(context, metrics, state);
         }
 
-        return new CardEvaluationResult(candidate, decimal.Round(state.ImmediateScore, 2), decimal.Round(state.ComboScore, 2), decimal.Round(state.TotalScore, 2), state.Flags);
+        return new CardEvaluationResult(candidate, metrics, decimal.Round(state.ImmediateScore, 2), decimal.Round(state.ComboScore, 2), decimal.Round(state.TotalScore, 2), state.Flags);
+    }
+
+    private static CardEvaluationResult? TryPickLethalCandidate(IReadOnlyList<CardEvaluationResult> candidates)
+    {
+        return candidates
+            .Where(static result => result.Metrics.HasLethal)
+            .OrderByDescending(static result => result.Metrics.KillCount)
+            .ThenBy(static result => result.Metrics.Overkill)
+            .ThenByDescending(static result => result.TotalScore)
+            .FirstOrDefault();
+    }
+
+    private static CardEvaluationResult? TryPickThreatResponseCandidate(AutoPlayContext context, IReadOnlyList<CardEvaluationResult> candidates)
+    {
+        if (context.ThreatenedHpLoss <= 0)
+        {
+            return null;
+        }
+
+        CardEvaluationResult? bestBlock = candidates
+            .Where(result => GetThreatReduction(context, result) > 0)
+            .OrderByDescending(result => GetThreatReduction(context, result))
+            .ThenByDescending(static result => result.Metrics.Cards)
+            .ThenByDescending(static result => result.Metrics.Weak)
+            .ThenByDescending(static result => result.Metrics.EnergyCost + result.Metrics.StarCost)
+            .ThenByDescending(static result => result.TotalScore)
+            .FirstOrDefault();
+        if (bestBlock != null)
+        {
+            return bestBlock;
+        }
+
+        return candidates
+            .Where(static result => result.Metrics.Cards > 0 || result.Metrics.Weak > 0 || result.Metrics.HasBuff || result.Metrics.IsPower)
+            .OrderByDescending(result => GetThreatUtilityScore(context, result))
+            .ThenByDescending(static result => result.TotalScore)
+            .FirstOrDefault();
+    }
+
+    private static CardEvaluationResult? TryPickSetupCandidate(AutoPlayContext context, IReadOnlyList<CardEvaluationResult> candidates)
+    {
+        if (context.ThreatenedHpLoss > 0)
+        {
+            return null;
+        }
+
+        CardEvaluationResult? bestSetup = candidates
+            .Where(static result => IsSetupCandidate(result.Metrics))
+            .OrderByDescending(result => GetSetupScore(context, result))
+            .FirstOrDefault();
+        if (bestSetup == null)
+        {
+            return null;
+        }
+
+        if (context.CardsPlayedThisTurn <= 1)
+        {
+            return bestSetup;
+        }
+
+        if (GetSetupScore(context, bestSetup) >= 18m)
+        {
+            return bestSetup;
+        }
+
+        return null;
+    }
+
+    private static CardEvaluationResult? TryPickPowerCandidate(AutoPlayContext context, IReadOnlyList<CardEvaluationResult> candidates)
+    {
+        if (context.ThreatenedHpLoss > 0)
+        {
+            return null;
+        }
+
+        CardEvaluationResult? bestPower = candidates
+            .Where(static result => result.Metrics.IsPower)
+            .OrderByDescending(result => GetPowerScore(context, result))
+            .FirstOrDefault();
+        if (bestPower == null)
+        {
+            return null;
+        }
+
+        if (context.RoundNumber <= 3 || context.CardsPlayedThisTurn == 0 || context.PowersPlayedThisTurn == 0)
+        {
+            return bestPower;
+        }
+
+        if (GetPowerScore(context, bestPower) >= 20m)
+        {
+            return bestPower;
+        }
+
+        return null;
+    }
+
+    private static CardEvaluationResult PickHighestScoreCandidate(IReadOnlyList<CardEvaluationResult> candidates)
+    {
+        return candidates
+            .OrderByDescending(static result => result.TotalScore)
+            .First();
+    }
+
+    private static CardEvaluationResult? TryPickAttackCandidate(IReadOnlyList<CardEvaluationResult> candidates)
+    {
+        return candidates
+            .Where(static result => result.Metrics.IsAttack)
+            .OrderByDescending(static result => GetAttackScore(result))
+            .FirstOrDefault();
+    }
+
+    private static int GetThreatReduction(AutoPlayContext context, CardEvaluationResult result)
+    {
+        int blockValue = Math.Max(result.Metrics.TotalBlock, result.Candidate.Card.GainsBlock ? 1 : 0);
+        return Math.Min(blockValue, context.ThreatenedHpLoss);
+    }
+
+    private static decimal GetThreatUtilityScore(AutoPlayContext context, CardEvaluationResult result)
+    {
+        CandidateMetrics metrics = result.Metrics;
+        decimal score = result.TotalScore;
+        score += GetThreatReduction(context, result) * 4m;
+        score += metrics.Cards * 8m;
+        score += metrics.Weak * 10m;
+        score += metrics.Dexterity * 6m;
+        score += metrics.GainEnergy * 5m;
+        score += metrics.GainStars * 5m;
+        if (metrics.IsPower)
+        {
+            score += 6m;
+        }
+
+        return score;
+    }
+
+    private static bool IsSetupCandidate(CandidateMetrics metrics)
+    {
+        return !metrics.IsAttack && (metrics.IsPower || metrics.Cards > 0 || metrics.HasDebuff || metrics.HasBuff);
+    }
+
+    private static decimal GetSetupScore(AutoPlayContext context, CardEvaluationResult result)
+    {
+        CandidateMetrics metrics = result.Metrics;
+        decimal score = result.TotalScore;
+        score += metrics.Cards * 8m;
+        score += (metrics.Weak + metrics.Vulnerable) * 6m;
+        score += metrics.Poison * 4m;
+        score += (metrics.Strength + metrics.Dexterity) * 5m;
+        score += (metrics.GainEnergy + metrics.GainStars) * 5m;
+        if (metrics.IsPower)
+        {
+            score += context.RoundNumber <= 2 ? 18m : 8m;
+        }
+
+        if (context.HasHighValueFollowUp(result.Candidate.Card, 0, static card => card.Type == CardType.Attack))
+        {
+            score += 8m;
+        }
+
+        return score;
+    }
+
+    private static decimal GetPowerScore(AutoPlayContext context, CardEvaluationResult result)
+    {
+        CandidateMetrics metrics = result.Metrics;
+        decimal score = result.TotalScore;
+        score += context.RoundNumber <= 2 ? 28m : (context.RoundNumber == 3 ? 16m : 6m);
+        score += metrics.Cards * 6m;
+        score += (metrics.GainEnergy + metrics.GainStars) * 7m;
+        score += (metrics.Strength + metrics.Dexterity) * 6m;
+        score += (metrics.Weak + metrics.Vulnerable + metrics.Poison) * 5m;
+        return score;
+    }
+
+    private static decimal GetAttackScore(CardEvaluationResult result)
+    {
+        CandidateMetrics metrics = result.Metrics;
+        decimal score = result.TotalScore;
+        score += metrics.EffectiveDamageTotal * 0.75m;
+        score += metrics.KillCount * 30m;
+        return score;
     }
 
     private static bool ShouldSkipCard(CardModel card)
     {
         return SkippedByAutoplayIds.Contains(card.Id) || card.TargetType == TargetType.TargetedNoCreature || card.Type == CardType.Quest;
+    }
+
+    private static void LogCandidateDecision(AutoPlayContext context, HashSet<CardModel> attemptedCards, IReadOnlyList<CardEvaluationResult> candidates, CardEvaluationResult? selected, string stage)
+    {
+        StringBuilder header = new();
+        header.Append("CombatAutoHost[AI] ");
+        header.Append("turn=").Append(context.RoundNumber);
+        header.Append(" hp=").Append(context.CurrentHp).Append('/').Append(context.MaxHp);
+        header.Append(" block=").Append(context.CurrentBlock);
+        header.Append(" incoming=").Append(context.IncomingAttackDamage);
+        header.Append(" threatened=").Append(context.ThreatenedHpLoss);
+        header.Append(" energy=").Append(context.Energy);
+        header.Append(" stars=").Append(context.Stars);
+        header.Append(" played=").Append(context.CardsPlayedThisTurn);
+        header.Append(" hand=").Append(context.HandCards.Count);
+        header.Append(" stage=").Append(stage);
+        Log.Info(header.ToString());
+
+        foreach (CardModel card in context.HandCards)
+        {
+            if (attemptedCards.Contains(card))
+            {
+                Log.Info($"CombatAutoHost[AI] hand {card.Title}: skipped=attempted");
+                continue;
+            }
+
+            if (ShouldSkipCard(card))
+            {
+                Log.Info($"CombatAutoHost[AI] hand {card.Title}: skipped=filtered type={card.Type} target={card.TargetType}");
+                continue;
+            }
+
+            if (!card.CanPlay(out UnplayableReason reason, out AbstractModel? preventer))
+            {
+                string preventerText = preventer?.Id.Entry ?? "-";
+                Log.Info($"CombatAutoHost[AI] hand {card.Title}: skipped=unplayable reason={reason} preventer={preventerText}");
+                continue;
+            }
+
+            List<CardEvaluationResult> cardCandidates = candidates
+                .Where(result => ReferenceEquals(result.Candidate.Card, card))
+                .OrderByDescending(static result => result.TotalScore)
+                .ToList();
+
+            if (cardCandidates.Count == 0)
+            {
+                Log.Info($"CombatAutoHost[AI] hand {card.Title}: skipped=no_valid_target targetType={card.TargetType}");
+                continue;
+            }
+
+            foreach (CardEvaluationResult result in cardCandidates)
+            {
+                string marker = ReferenceEquals(selected, result) ? "SELECT" : "option";
+                Log.Info($"CombatAutoHost[AI] {marker} {DescribeCandidate(result, selected, stage)}");
+            }
+        }
+    }
+
+    private static string DescribeCandidate(CardEvaluationResult result, CardEvaluationResult? selected, string stage)
+    {
+        CandidateMetrics metrics = result.Metrics;
+        string target = result.Candidate.Target?.Name ?? result.Candidate.Card.TargetType.ToString();
+        StringBuilder text = new();
+        text.Append(result.Candidate.Card.Title).Append(" -> ").Append(target);
+        text.Append($" | total={result.TotalScore:0.##}");
+        text.Append($" immediate={result.ImmediateScore:0.##}");
+        text.Append($" combo={result.ComboScore:0.##}");
+        text.Append($" cost={metrics.EnergyCost}e/{metrics.StarCost}s");
+        text.Append($" dmg={metrics.EffectiveDamageTotal}");
+        text.Append($" block={metrics.TotalBlock}");
+        text.Append($" draw={metrics.Cards}");
+        text.Append($" weak={metrics.Weak}");
+        text.Append($" vuln={metrics.Vulnerable}");
+        text.Append($" poison={metrics.Poison}");
+        text.Append($" str={metrics.Strength}");
+        text.Append($" dex={metrics.Dexterity}");
+        text.Append($" gainE={metrics.GainEnergy}");
+        text.Append($" gainS={metrics.GainStars}");
+        text.Append($" type={result.Candidate.Card.Type}");
+        text.Append($" flags={result.ReasonFlags}");
+
+        if (!ReferenceEquals(selected, result) && selected != null)
+        {
+            decimal delta = selected.TotalScore - result.TotalScore;
+            text.Append($" | not_selected=selected_{stage}");
+            text.Append($" selected_card={selected.Candidate.Card.Title}");
+            text.Append($" selected_total={selected.TotalScore:0.##}");
+            text.Append($" delta={delta:0.##}");
+        }
+
+        return text.ToString();
     }
 }

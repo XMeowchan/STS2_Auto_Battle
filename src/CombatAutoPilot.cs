@@ -28,9 +28,10 @@ internal sealed class CombatAutoPilot : IDisposable
     private const int SuccessfulTurnDelayMs = 180;
     private const int EmptyTurnDelayMs = 250;
     private const int QueuePollDelayMs = 30;
-    private const int QueueWaitTimeoutMs = 4000;
+    private const int QueueWaitTimeoutMs = 8000;
 
     private readonly IAutoPlayPolicy _policy = new ComboAwareAutoPlayPolicy();
+    private readonly AutoPlayChoiceSelector _choiceSelector = new();
 
     private CancellationTokenSource? _cts;
     private int _runVersion;
@@ -116,26 +117,21 @@ internal sealed class CombatAutoPilot : IDisposable
                         break;
                     }
 
-                    decimal turnEndThreshold = _policy.GetTurnEndThreshold(AutoPlaySettingsStore.CurrentMode);
-                    if (nextPlay.TotalScore < turnEndThreshold && !ShouldForcePlay(nextPlay, playedAnyCard))
-                    {
-                        nextPlay = _policy.PickFallbackCandidate(player, attemptedCards);
-                        if (nextPlay == null)
-                        {
-                            break;
-                        }
-                    }
-
                     CardModel nextCard = nextPlay.Candidate.Card;
                     attemptedCards.Add(nextCard);
 
                     try
                     {
-                        if (TryQueueCardPlay(nextPlay.Candidate))
+                        Log.Info($"CombatAutoHost[AI_EXEC] try {DescribeCandidate(nextPlay.Candidate)} total={nextPlay.TotalScore:0.##} flags={nextPlay.ReasonFlags}");
+                        if (await TryPlayCardAsync(nextPlay.Candidate, ct))
                         {
                             playedAnyCard = true;
                             cardsPlayed++;
-                            await WaitForQueuedPlayAsync(nextCard, ct);
+                            Log.Info($"CombatAutoHost[AI_EXEC] queued {DescribeCandidate(nextPlay.Candidate)}");
+                        }
+                        else
+                        {
+                            Log.Info($"CombatAutoHost[AI_EXEC] rejected {DescribeCandidate(nextPlay.Candidate)}");
                         }
                     }
                     catch (Exception ex)
@@ -205,37 +201,22 @@ internal sealed class CombatAutoPilot : IDisposable
         return LocalContext.GetMe(state);
     }
 
-    private static bool TryQueueCardPlay(CardCandidate candidate)
+    private async Task<bool> TryPlayCardAsync(CardCandidate candidate, CancellationToken ct)
     {
-        return candidate.Card.TryManualPlay(candidate.Target);
+        using IDisposable selectorScope = CardSelectCmd.PushSelector(_choiceSelector);
+        if (!candidate.Card.TryManualPlay(candidate.Target))
+        {
+            return false;
+        }
+
+        await WaitForQueuedPlayAsync(candidate.Card, ct);
+        return true;
     }
 
-    private static bool ShouldForcePlay(CardEvaluationResult evaluation, bool playedAnyCard)
+    private static string DescribeCandidate(CardCandidate candidate)
     {
-        const CardReasonFlags actionableFlags =
-            CardReasonFlags.Lethal |
-            CardReasonFlags.Damage |
-            CardReasonFlags.Block |
-            CardReasonFlags.Draw |
-            CardReasonFlags.Debuff |
-            CardReasonFlags.Buff |
-            CardReasonFlags.Power;
-
-        CardModel card = evaluation.Candidate.Card;
-        bool hasActionableValue = (evaluation.ReasonFlags & actionableFlags) != 0;
-        bool isEthereal = card.Keywords.Contains(CardKeyword.Ethereal);
-
-        if (evaluation.TotalScore >= -24m && hasActionableValue)
-        {
-            return true;
-        }
-
-        if (!playedAnyCard && evaluation.TotalScore >= -42m && (hasActionableValue || isEthereal))
-        {
-            return true;
-        }
-
-        return false;
+        string target = candidate.Target?.Name ?? candidate.Card.TargetType.ToString();
+        return $"{candidate.Card.Title} -> {target}";
     }
 
     private static async Task WaitForQueuedPlayAsync(CardModel card, CancellationToken ct)

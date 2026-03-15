@@ -42,12 +42,9 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (!context.HasRelic<IceCream>() || context.Mode != AutoPlayMode.Defensive) return;
-            int remainingEnergy = context.Energy - metrics.EnergyCost;
-            if (remainingEnergy > 1 && metrics.Candidate.Card.EnergyCost.GetAmountToSpend() > 0 && state.ImmediateScore < 8m)
+            if (context.HasRelic<IceCream>() && metrics.EnergyCost > 0)
             {
-                state.AddPenalty(2m + remainingEnergy);
-                state.AddReason(CardReasonFlags.ResourceHold);
+                state.AddCombo(2m);
             }
         }
     }
@@ -67,10 +64,9 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (context.Mode == AutoPlayMode.Defensive && context.HasRelic<ArtOfWar>() && metrics.IsAttack && context.AttacksPlayedThisTurn == 0 && !metrics.HasLethal && metrics.EffectiveDamageTotal < 5)
+            if (context.HasRelic<ArtOfWar>() && metrics.IsAttack && metrics.EnergyCost + metrics.StarCost > 0)
             {
-                state.AddPenalty(2m);
-                state.AddReason(CardReasonFlags.ResourceHold);
+                state.AddCombo(1m);
             }
         }
     }
@@ -79,10 +75,9 @@ internal static class AutoPlayComboRules
     {
         public void Apply(AutoPlayContext context, CandidateMetrics metrics, CardEvaluationState state)
         {
-            if (context.Mode == AutoPlayMode.Defensive && context.HasRelic<Pocketwatch>() && context.CardsPlayedThisTurn >= 3 && state.ImmediateScore < 6m)
+            if (context.HasRelic<Pocketwatch>() && context.CardsPlayedThisTurn >= 3 && metrics.Cards > 0)
             {
-                state.AddPenalty(2m);
-                state.AddReason(CardReasonFlags.ResourceHold);
+                state.AddCombo(2m + metrics.Cards);
             }
         }
     }
