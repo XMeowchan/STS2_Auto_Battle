@@ -18,12 +18,6 @@ func _initialize() -> void:
         quit(err)
         return
 
-    err = packer.add_file("res://mod_manifest.json", ProjectSettings.globalize_path("res://mod_manifest.json"))
-    if err != OK:
-        push_error("Failed to add mod manifest: %s" % err)
-        quit(err)
-        return
-
     _collect_files(ProjectSettings.globalize_path(PACK_ROOT), "res://%s" % MOD_ID, packer)
 
     err = packer.flush()

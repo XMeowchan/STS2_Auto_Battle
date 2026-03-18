@@ -10,11 +10,9 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Sts2InstallHelpers.ps1")
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$manifest = Get-Content -Raw (Join-Path $projectRoot "mod_manifest.json") | ConvertFrom-Json
-$modId = [string]$manifest.pck_name
-if ([string]::IsNullOrWhiteSpace($modId)) {
-    $modId = "CombatAutoHost"
-}
+$modId = "CombatAutoHost"
+$manifestPath = Join-Path $projectRoot "$modId.json"
+$manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
 
 $buildOut = Join-Path $projectRoot "src\bin\$Configuration"
 $stagedModDir = Join-Path $PayloadRoot $modId
@@ -38,7 +36,7 @@ if (-not $SkipBuild) {
 $requiredArtifacts = @(
     (Join-Path $buildOut "$modId.dll"),
     (Join-Path $buildOut "$modId.pck"),
-    (Join-Path $projectRoot "mod_manifest.json")
+    $manifestPath
 )
 
 foreach ($artifactPath in $requiredArtifacts) {
@@ -59,6 +57,6 @@ New-Item -ItemType Directory -Force -Path $stagedModDir | Out-Null
 Copy-Item (Join-Path $buildOut "$modId.dll") (Join-Path $stagedModDir "$modId.dll") -Force
 Copy-Item (Join-Path $buildOut "$modId.pck") (Join-Path $stagedModDir "$modId.pck") -Force
 Set-PckCompatibilityHeader -Path (Join-Path $stagedModDir "$modId.pck") -EngineMinorVersion 5
-Copy-Item (Join-Path $projectRoot "mod_manifest.json") (Join-Path $stagedModDir "mod_manifest.json") -Force
+Copy-Item $manifestPath (Join-Path $stagedModDir "$modId.json") -Force
 
 Write-Host "Staged installer payload: $stagedModDir"

@@ -44,7 +44,12 @@ public static class ModEntry
     {
         try
         {
-            string manifestPath = Path.Combine(InstallDirectory, "mod_manifest.json");
+            string manifestPath = Path.Combine(InstallDirectory, $"{ModId}.json");
+            if (!File.Exists(manifestPath))
+            {
+                manifestPath = Path.Combine(InstallDirectory, "mod_manifest.json");
+            }
+
             if (!File.Exists(manifestPath))
             {
                 return "0.0.0";
@@ -62,7 +67,7 @@ public static class ModEntry
         }
         catch (Exception ex)
         {
-            Log.Warn($"{ModId}: failed to read version from mod_manifest.json: {ex.Message}");
+            Log.Warn($"{ModId}: failed to read version from manifest json: {ex.Message}");
         }
 
         return "0.0.0";

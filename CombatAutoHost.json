@@ -1,7 +1,10 @@
-﻿{
-  "pck_name": "CombatAutoHost",
+{
+  "id": "CombatAutoHost",
   "name": "Multiplayer Combat Host",
   "author": "OpenAI Codex",
   "description": "Adds a combat auto-host button that reuses the in-game battle UI style and auto-plays the local player's turn in combat.",
-  "version": "0.2.1"
+  "version": "0.2.2",
+  "has_pck": true,
+  "has_dll": true,
+  "affects_gameplay": false
 }

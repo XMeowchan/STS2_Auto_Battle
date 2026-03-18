@@ -8,9 +8,9 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $srcDir = Join-Path $projectRoot "src"
-$manifestPath = Join-Path $projectRoot "mod_manifest.json"
+$modId = "CombatAutoHost"
+$manifestPath = Join-Path $projectRoot "$modId.json"
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-$modId = [string]$manifest.pck_name
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $OutputDir = Join-Path $projectRoot "dist"
@@ -45,7 +45,7 @@ Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
 Copy-Item -LiteralPath $dllPath -Destination (Join-Path $packageRoot "$modId.dll") -Force
 Copy-Item -LiteralPath $pckPath -Destination (Join-Path $packageRoot "$modId.pck") -Force
-Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $packageRoot "mod_manifest.json") -Force
+Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $packageRoot "$modId.json") -Force
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 Compress-Archive -Path $packageRoot -DestinationPath $zipPath -Force

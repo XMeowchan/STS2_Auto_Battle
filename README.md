@@ -60,7 +60,7 @@ That copies:
 
 - `CombatAutoHost.dll`
 - `CombatAutoHost.pck`
-- `mod_manifest.json`
+- `CombatAutoHost.json`
 
 into the game's `mods\CombatAutoHost` folder.
 
@@ -80,7 +80,7 @@ If the variables are not set, the scripts still try to auto-detect both paths on
 
 ## Release Flow
 
-- Push a tag like `v0.2.1` to trigger `Publish Release`
+- Push a tag like `v0.2.2` to trigger `Publish Release`
 - Or run the `Publish Release` workflow manually and provide a tag name
 - Each release now ships:
   - `CombatAutoHost-Setup-<version>.exe`

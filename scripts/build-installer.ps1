@@ -6,6 +6,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$modId = "CombatAutoHost"
+$manifestPath = Join-Path $projectRoot "$modId.json"
 
 $payloadArgs = @(
     "-ExecutionPolicy", "Bypass",
@@ -24,8 +26,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "build-installer-payload failed."
 }
 
-$manifest = Get-Content -Raw (Join-Path $projectRoot "mod_manifest.json") | ConvertFrom-Json
-$modId = if ([string]::IsNullOrWhiteSpace([string]$manifest.pck_name)) { "CombatAutoHost" } else { [string]$manifest.pck_name }
+$manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
 $appName = if ([string]::IsNullOrWhiteSpace([string]$manifest.name)) { "Combat Auto Host" } else { [string]$manifest.name }
 $payloadDir = Join-Path $projectRoot "dist\installer\payload"
 $issPath = Join-Path $projectRoot "installer\CombatAutoHost.iss"

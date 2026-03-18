@@ -405,6 +405,7 @@ try {
     }
 
     New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
+    Remove-Item -LiteralPath (Join-Path $TargetDir 'mod_manifest.json') -Force -ErrorAction SilentlyContinue
     Get-ChildItem -LiteralPath $sourceRoot -Force | ForEach-Object {
         Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $TargetDir $_.Name) -Recurse -Force
     }

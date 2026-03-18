@@ -38,6 +38,6 @@ jobs:
         with:
           name: CombatAutoHost-Release
           path: |
-            mod_manifest.json
+            CombatAutoHost.json
             src/bin/Release/CombatAutoHost.dll
             src/bin/Release/CombatAutoHost.pck

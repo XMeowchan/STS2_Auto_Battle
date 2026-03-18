@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
 function Get-Manifest {
-    Get-Content -Raw (Join-Path $projectRoot "mod_manifest.json") | ConvertFrom-Json
+    Get-Content -Raw (Join-Path $projectRoot "CombatAutoHost.json") | ConvertFrom-Json
 }
 
 function New-ReleaseNotes {
@@ -219,13 +219,13 @@ function Publish-ReleaseAssets {
 $manifest = Get-Manifest
 $version = [string]$manifest.version
 if ([string]::IsNullOrWhiteSpace($version)) {
-    throw "mod_manifest.json does not contain a version."
+    throw "CombatAutoHost.json does not contain a version."
 }
 
-$modId = if ([string]::IsNullOrWhiteSpace([string]$manifest.pck_name)) { "CombatAutoHost" } else { [string]$manifest.pck_name }
+$modId = if ([string]::IsNullOrWhiteSpace([string]$manifest.id)) { "CombatAutoHost" } else { [string]$manifest.id }
 $tag = if ([string]::IsNullOrWhiteSpace($TagName)) { "v$version" } else { $TagName.Trim() }
 if ($tag -ne ("v$version")) {
-    throw "Tag '$tag' does not match mod_manifest.json version '$version'."
+    throw "Tag '$tag' does not match CombatAutoHost.json version '$version'."
 }
 
 if (-not $SkipBuild) {

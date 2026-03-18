@@ -3,7 +3,7 @@
 #endif
 
 #ifndef AppVersion
-#define AppVersion "0.2.1"
+#define AppVersion "0.2.2"
 #endif
 
 #ifndef ModId
@@ -37,6 +37,9 @@ Name: "chinesesimp"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#PayloadDir}\{#ModId}\*"; DestDir: "{code:GetTargetModDir}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+Type: files; Name: "{code:GetTargetModDir}\mod_manifest.json"
 
 [Code]
 var

@@ -9,7 +9,7 @@ The portable zip is the manual/portable distribution artifact. The installer exe
 
 ## Local release flow
 
-1. Update `mod_manifest.json` version.
+1. Update `CombatAutoHost.json` version.
 2. Build both release artifacts:
 
 ```powershell
